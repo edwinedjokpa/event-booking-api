@@ -211,7 +211,7 @@ func (svc *authService) RefreshToken(ctx context.Context, tokenString string) Au
 		panic(HTTPException.NewBadRequestException("Failed to save new refresh session", nil))
 	}
 
-	accessExpiresAt := 15 * time.Minute
+	accessExpiresAt := 1 * time.Hour
 	accessClaims := jwt.MapClaims{"userID": sessionData.UserID, "email": sessionData.Email}
 	newAccessToken, err := utils.GenerateToken(accessClaims, accessExpiresAt, svc.jwtSecret)
 	if err != nil {
