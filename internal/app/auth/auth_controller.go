@@ -14,16 +14,19 @@ import (
 type AuthController interface {
 	Register(c *gin.Context)
 	Login(c *gin.Context)
+	ForgotPassword(c *gin.Context)
+	ResetPassword(c *gin.Context)
 	Logout(c *gin.Context)
 	RefreshToken(c *gin.Context)
 }
 
 type authController struct {
-	service AuthService
+	service   AuthService
+	validator *validator.Validate
 }
 
-func NewAuthController(service AuthService) AuthController {
-	return &authController{service}
+func NewAuthController(service AuthService, validator *validator.Validate) AuthController {
+	return &authController{service, validator}
 }
 
 func (ctrl *authController) Register(ctx *gin.Context) {
@@ -34,8 +37,7 @@ func (ctrl *authController) Register(ctx *gin.Context) {
 		return
 	}
 
-	validate := validator.New()
-	if err := validate.Struct(request); err != nil {
+	if err := ctrl.validator.Struct(request); err != nil {
 		exception := utils.FormatValidationErrors(err)
 		ctx.JSON(exception.StatusCode, exception.ToResponse())
 		return
@@ -53,14 +55,13 @@ func (ctrl *authController) Login(ctx *gin.Context) {
 		return
 	}
 
-	validate := validator.New()
-	if err := validate.Struct(request); err != nil {
+	if err := ctrl.validator.Struct(request); err != nil {
 		exception := utils.FormatValidationErrors(err)
 		ctx.JSON(exception.StatusCode, exception.ToResponse())
 		return
 	}
 
-	tokens := ctrl.service.Login(request)
+	tokens := ctrl.service.Login(ctx, request)
 	cookie := &http.Cookie{
 		Name:     "refresh_token",
 		Value:    tokens.RefreshToken,
@@ -73,7 +74,43 @@ func (ctrl *authController) Login(ctx *gin.Context) {
 	}
 
 	http.SetCookie(ctx.Writer, cookie)
-	ctx.JSON(http.StatusOK, APIResponse.Success("User login successfully", gin.H{"token": tokens.AccessToken, "type": "Bearer"}))
+	ctx.JSON(http.StatusOK, APIResponse.Success("User login successfully", gin.H{"token": tokens.AccessToken}))
+}
+
+func (ctrl *authController) ForgotPassword(ctx *gin.Context) {
+	var request AuthDTO.ForgotPasswordRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		exception := HTTPException.NewBadRequestException("Bad Request Exception", err.Error())
+		ctx.JSON(exception.StatusCode, exception.ToResponse())
+		return
+	}
+
+	if err := ctrl.validator.Struct(request); err != nil {
+		exception := utils.FormatValidationErrors(err)
+		ctx.JSON(exception.StatusCode, exception.ToResponse())
+		return
+	}
+
+	ctrl.service.ForgotPassword(request)
+	ctx.JSON(http.StatusOK, APIResponse.Success("If an account with that email exists, a password reset OTP has been sent.", nil))
+}
+
+func (ctrl *authController) ResetPassword(ctx *gin.Context) {
+	var request AuthDTO.ResetPasswordRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		exception := HTTPException.NewBadRequestException("Bad Request Exception", err.Error())
+		ctx.JSON(exception.StatusCode, exception.ToResponse())
+		return
+	}
+
+	if err := ctrl.validator.Struct(request); err != nil {
+		exception := utils.FormatValidationErrors(err)
+		ctx.JSON(exception.StatusCode, exception.ToResponse())
+		return
+	}
+
+	ctrl.service.ResetPassword(request)
+	ctx.JSON(http.StatusOK, APIResponse.Success("Password reset successfully", nil))
 }
 
 func (ctrl *authController) Logout(ctx *gin.Context) {
@@ -83,7 +120,7 @@ func (ctrl *authController) Logout(ctx *gin.Context) {
 		return
 	}
 
-	ctrl.service.Logout(refreshToken)
+	ctrl.service.Logout(ctx, refreshToken)
 	cookie := &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
@@ -107,7 +144,7 @@ func (ctrl *authController) RefreshToken(ctx *gin.Context) {
 		return
 	}
 
-	tokens := ctrl.service.RefreshToken(refreshToken)
+	tokens := ctrl.service.RefreshToken(ctx, refreshToken)
 	cookie := &http.Cookie{
 		Name:     "refresh_token",
 		Value:    tokens.RefreshToken,

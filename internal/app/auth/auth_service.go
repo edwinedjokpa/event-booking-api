@@ -1,13 +1,15 @@
 package auth
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
 	AuthDTO "github.com/edwinedjokpa/event-booking-api/internal/app/auth/dto"
 	"github.com/edwinedjokpa/event-booking-api/internal/app/user"
-	"github.com/edwinedjokpa/event-booking-api/internal/pkg/redis"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/services"
 	HTTPException "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/httpexception"
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/utils"
 	"github.com/golang-jwt/jwt/v4"
@@ -16,18 +18,22 @@ import (
 
 type AuthService interface {
 	Register(request AuthDTO.RegisterUserRequest)
-	Login(request AuthDTO.LoginUserRequest) AuthDTO.LoginResponse
-	Logout(refreshToken string)
-	RefreshToken(tokenString string) AuthDTO.LoginResponse
+	Login(ctx context.Context, request AuthDTO.LoginUserRequest) AuthDTO.LoginResponse
+	ForgotPassword(request AuthDTO.ForgotPasswordRequest)
+	ResetPassword(request AuthDTO.ResetPasswordRequest)
+	Logout(ctx context.Context, token string)
+	RefreshToken(ctx context.Context, token string) AuthDTO.LoginResponse
 }
 
 type authService struct {
-	repository user.UserRepository
-	jwtSecret  string
+	repository     user.UserRepository
+	jwtSecret      string
+	sessionService *services.SessionService
+	otpService     services.OTPService
 }
 
-func NewAuthService(repository user.UserRepository, jwtSecret string) AuthService {
-	return &authService{repository, jwtSecret}
+func NewAuthService(repository user.UserRepository, jwtSecret string, sessionService *services.SessionService, otpService services.OTPService) AuthService {
+	return &authService{repository, jwtSecret, sessionService, otpService}
 }
 
 func (svc *authService) Register(request AuthDTO.RegisterUserRequest) {
@@ -60,7 +66,7 @@ func (svc *authService) Register(request AuthDTO.RegisterUserRequest) {
 	}
 }
 
-func (svc *authService) Login(request AuthDTO.LoginUserRequest) AuthDTO.LoginResponse {
+func (svc *authService) Login(ctx context.Context, request AuthDTO.LoginUserRequest) AuthDTO.LoginResponse {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(request.Email))
 
 	user, err := svc.repository.FindOneByEmail(normalizedEmail)
@@ -88,11 +94,7 @@ func (svc *authService) Login(request AuthDTO.LoginUserRequest) AuthDTO.LoginRes
 		panic(HTTPException.NewBadRequestException("Failed to generate refresh token", nil))
 	}
 
-	sessionData := &redis.SessionData{
-		UserID: user.ID,
-		Email:  user.Email,
-	}
-	err = redis.SetSession(refreshSessionID, sessionData.UserID, sessionData.Email, refreshExpiresAt)
+	err = svc.sessionService.SetSession(ctx, refreshSessionID, user.ID, user.Email, refreshExpiresAt)
 	if err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to create session", err.Error()))
 	}
@@ -103,7 +105,52 @@ func (svc *authService) Login(request AuthDTO.LoginUserRequest) AuthDTO.LoginRes
 	}
 }
 
-func (svc *authService) Logout(refreshToken string) {
+func (svc *authService) ForgotPassword(request AuthDTO.ForgotPasswordRequest) {
+	normalizedEmail := strings.ToLower(strings.TrimSpace(request.Email))
+
+	user, err := svc.repository.FindOneByEmail(normalizedEmail)
+	if err != nil {
+		return
+	}
+
+	otp, err := svc.otpService.GenerateAndStoreOTP(user.Email)
+	if err != nil {
+		panic(HTTPException.NewBadRequestException("Failed to generate OTP", err.Error()))
+	}
+
+	fmt.Printf("OTP for %s is: %s (expires in 15 minutes)\n", user.Email, otp)
+}
+
+func (svc *authService) ResetPassword(request AuthDTO.ResetPasswordRequest) {
+	normalizedEmail := strings.ToLower(strings.TrimSpace(request.Email))
+
+	user, err := svc.repository.FindOneByEmail(normalizedEmail)
+	if err != nil {
+		panic(HTTPException.NewBadRequestException("Invalid or expired OTP", nil))
+	}
+
+	err = svc.otpService.ValidateOTP(user.Email, request.OTP)
+	if err != nil {
+		panic(HTTPException.NewBadRequestException("Invalid or expired OTP", nil))
+	}
+
+	newHashedPassword, err := utils.HashPassword(request.NewPassword)
+	if err != nil {
+		panic(HTTPException.NewBadRequestException("Failed to hash new password", nil))
+	}
+
+	err = svc.repository.UpdatePassword(user.ID, newHashedPassword)
+	if err != nil {
+		panic(HTTPException.NewBadRequestException("Failed to update password", err.Error()))
+	}
+
+	err = svc.otpService.DeleteOTPKey(user.Email)
+	if err != nil {
+		return
+	}
+}
+
+func (svc *authService) Logout(ctx context.Context, refreshToken string) {
 	_, claims, err := utils.ValidateToken(refreshToken, []byte(svc.jwtSecret))
 	if err != nil {
 		panic(HTTPException.NewUnauthorizedException("Invalid refresh token", nil))
@@ -114,13 +161,13 @@ func (svc *authService) Logout(refreshToken string) {
 		panic(HTTPException.NewUnauthorizedException("invalid session ID in refresh token claims", nil))
 	}
 
-	err = redis.DeleteSession(sessionID)
+	err = svc.sessionService.DeleteSession(ctx, sessionID)
 	if err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to delete session", err.Error()))
 	}
 }
 
-func (svc *authService) RefreshToken(tokenString string) AuthDTO.LoginResponse {
+func (svc *authService) RefreshToken(ctx context.Context, tokenString string) AuthDTO.LoginResponse {
 	_, claims, err := utils.ValidateToken(tokenString, []byte(svc.jwtSecret))
 	if err != nil {
 		panic(HTTPException.NewUnauthorizedException("Invalid refresh token", nil))
@@ -136,19 +183,19 @@ func (svc *authService) RefreshToken(tokenString string) AuthDTO.LoginResponse {
 		panic(HTTPException.NewUnauthorizedException("Invalid session", nil))
 	}
 
-	sessionData, err := redis.GetSession(sessionID)
+	sessionData, err := svc.sessionService.GetSession(ctx, sessionID)
 	if err != nil {
 		panic(HTTPException.NewUnauthorizedException("Session expired or revoked", nil))
 	}
 
-	if err := redis.DeleteSession(sessionID); err != nil {
+	if err := svc.sessionService.DeleteSession(ctx, sessionID); err != nil {
 		panic(HTTPException.NewBadRequestException("failed to delete sessionI D", nil))
 	}
 
 	newSessionID := utils.GenerateUUID()
 	refreshExpiresAt := 7 * 24 * time.Hour
 
-	if err := redis.SetSession(newSessionID, sessionData.UserID, sessionData.Email, refreshExpiresAt); err != nil {
+	if err := svc.sessionService.SetSession(ctx, newSessionID, sessionData.UserID, sessionData.Email, refreshExpiresAt); err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to save new refresh session", nil))
 	}
 

@@ -16,3 +16,13 @@ type LoginResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 }
+
+type ForgotPasswordRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+type ResetPasswordRequest struct {
+	Email       string `json:"email" validate:"required,email"`
+	OTP         string `json:"otp" validate:"required"`
+	NewPassword string `json:"new_password" validate:"required,min=8"`
+}

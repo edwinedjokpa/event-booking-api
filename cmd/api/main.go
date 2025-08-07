@@ -11,6 +11,8 @@ import (
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/db"
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/middleware"
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/redis"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/services"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/validator"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -31,8 +33,20 @@ func main() {
 	// Run Migrations
 	db.RunMigrations(gormDB)
 
-	// Initialize Redis
-	redis.InitRedis(config.RedisAddr)
+	// Initialize a single, configured validator instance.
+	validator := validator.NewValidator()
+
+	// Initialize the Redis client.
+	redisClient, err := redis.NewRedisClient("localhost:6379")
+	if err != nil {
+		log.Fatalf("Failed to initialize Redis client: %v", err)
+	}
+
+	// Initialize the Session Service.
+	sessionService := services.NewSessionService(redisClient)
+
+	// Initialize Otp Service
+	otpService := services.NewOTPService(redisClient)
 
 	// Use gin.New() to build a custom middleware stack
 	router := gin.New()
@@ -49,11 +63,11 @@ func main() {
 	eventRepository := event.NewEventRepository(gormDB)
 
 	// Initialize Services
-	authService := auth.NewAuthService(userRepository, config.JWTSecret)
+	authService := auth.NewAuthService(userRepository, config.JWTSecret, sessionService, otpService)
 	eventService := event.NewEventService(eventRepository)
 
 	// Initialize Controllers
-	authController := auth.NewAuthController(authService)
+	authController := auth.NewAuthController(authService, validator)
 	eventController := event.NewEventController(eventService)
 
 	api := router.Group("/api")
