@@ -17,6 +17,7 @@ type DBConfig struct {
 }
 
 type Config struct {
+	Port        string
 	DatabaseURL string
 	RedisAddr   string
 	JWTSecret   string
@@ -29,9 +30,14 @@ func LoadConfig() (*Config, error) {
 	}
 
 	config := &Config{
+		Port:        os.Getenv("PORT"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		RedisAddr:   os.Getenv("REDIS_URL"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
+	}
+
+	if config.Port == "" {
+		config.Port = "9000"
 	}
 
 	if config.DatabaseURL == "" {

@@ -58,14 +58,14 @@ func main() {
 
 	api := router.Group("/api")
 
-	api.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "Welcome to the Event Booking API"})
+	api.GET("/", func(ctx *gin.Context) {
+		ctx.String(http.StatusOK, "Welcome to the Event Booking API")
 	})
 
 	auth.RegisterRoutes(api, authController)
 	event.RegisterRoutes(api, eventController, []byte(config.JWTSecret))
 
-	if err := router.Run(":8000"); err != nil {
+	if err := router.Run(":" + config.Port); err != nil {
 		log.Fatalf("Failed to run server: %v", err)
 	}
 }
