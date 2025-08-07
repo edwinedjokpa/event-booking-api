@@ -24,39 +24,29 @@ func main() {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
-	// Connect Database
+	// Connect to Database
 	gormDB, err := db.NewGormDB(config.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Error connecting to database: %v", err)
 	}
 
-	// Run Migrations
+	// Run Database Migrations
 	db.RunMigrations(gormDB)
 
 	// Initialize a single, configured validator instance.
 	validator := validator.NewValidator()
 
-	// Initialize the Redis client.
+	// Initialize the Redis Client
 	redisClient, err := redis.NewRedisClient("localhost:6379")
 	if err != nil {
 		log.Fatalf("Failed to initialize Redis client: %v", err)
 	}
 
-	// Initialize the Session Service.
+	// Initialize the Session Service
 	sessionService := services.NewSessionService(redisClient)
 
-	// Initialize Otp Service
+	// Initialize the Otp Service
 	otpService := services.NewOTPService(redisClient)
-
-	// Use gin.New() to build a custom middleware stack
-	router := gin.New()
-
-	router.SetTrustedProxies(nil)
-
-	// Register global middleware here, before any routes
-	router.Use(gin.Logger())
-	router.Use(cors.Default())
-	router.Use(middleware.RecoveryMiddleware())
 
 	// Initialize Repositories
 	userRepository := user.NewUserRepository(gormDB)
@@ -70,12 +60,22 @@ func main() {
 	authController := auth.NewAuthController(authService, validator)
 	eventController := event.NewEventController(eventService)
 
+	// Use gin.New() to build a custom middleware stack
+	router := gin.New()
+	router.SetTrustedProxies(nil)
+
+	// Register global middleware here, before any routes
+	router.Use(gin.Logger())
+	router.Use(cors.Default())
+	router.Use(middleware.RecoveryMiddleware())
+
 	api := router.Group("/api")
 
 	api.GET("/", func(ctx *gin.Context) {
 		ctx.String(http.StatusOK, "Welcome to the Event Booking API")
 	})
 
+	// Register Router
 	auth.RegisterRoutes(api, authController)
 	event.RegisterRoutes(api, eventController, []byte(config.JWTSecret))
 
