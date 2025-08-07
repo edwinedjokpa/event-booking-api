@@ -55,28 +55,19 @@ func (svc *eventService) GetAllEvents() []Event {
 
 func (svc *eventService) GetEventByID(eventID string) *Event {
 	event, err := svc.repository.FindOneByID(eventID)
-
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		panic(err)
 	}
 
-	if event == nil {
-		panic(HTTPException.NewNotFoundException(fmt.Sprintf("Event with ID %s not found", eventID), err.Error()))
+	if event == nil || errors.Is(err, gorm.ErrRecordNotFound) {
+		panic(HTTPException.NewNotFoundException(fmt.Sprintf("Event with ID %s not found", eventID), nil))
 	}
 
 	return event
 }
 
 func (svc *eventService) UpdateEvent(userID, eventID string, request EventDTO.UpdateEventRequest) {
-	existingEvent, err := svc.repository.FindOneByID(eventID)
-
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		panic(err)
-	}
-
-	if err != nil {
-		panic(HTTPException.NewNotFoundException(fmt.Sprintf("Event with ID %s not found", eventID), err.Error()))
-	}
+	existingEvent := svc.GetEventByID(eventID)
 
 	if existingEvent.UserID != userID {
 		panic(HTTPException.NewUnauthorizedException("You cannot update an event that was not created by you", nil))
@@ -101,26 +92,18 @@ func (svc *eventService) UpdateEvent(userID, eventID string, request EventDTO.Up
 	existingEvent.UpdatedAt = time.Now()
 
 	if err := svc.repository.Update(*existingEvent); err != nil {
-		panic(HTTPException.NewBadRequestException("Failed to update event", nil))
+		panic(HTTPException.NewBadRequestException("Failed to update event", err.Error()))
 	}
 }
 
 func (svc *eventService) DeleteEvent(userID, eventID string) {
-	event, err := svc.repository.FindOneByID(eventID)
-
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		panic(err)
-	}
-
-	if err != nil {
-		panic(HTTPException.NewNotFoundException(fmt.Sprintf("Event with ID %s not found", eventID), err.Error()))
-	}
+	event := svc.GetEventByID(eventID)
 
 	if event.UserID != userID {
 		panic(HTTPException.NewUnauthorizedException("You cannot delete an event that was not created by you", nil))
 	}
 
 	if err := svc.repository.Delete(eventID); err != nil {
-		panic(HTTPException.NewBadRequestException("Failed to delete event", nil))
+		panic(HTTPException.NewBadRequestException("Failed to delete event", err.Error()))
 	}
 }
