@@ -21,11 +21,12 @@ type EventController interface {
 }
 
 type eventController struct {
-	service EventService
+	service   EventService
+	validator *validator.Validate
 }
 
-func NewEventController(service EventService) EventController {
-	return &eventController{service}
+func NewEventController(service EventService, validator *validator.Validate) EventController {
+	return &eventController{service, validator}
 }
 
 func (ctrl *eventController) CreateEvent(ctx *gin.Context) {
@@ -50,8 +51,7 @@ func (ctrl *eventController) CreateEvent(ctx *gin.Context) {
 		return
 	}
 
-	validate := validator.New()
-	if err := validate.Struct(request); err != nil {
+	if err := ctrl.validator.Struct(request); err != nil {
 		exception := utils.FormatValidationErrors(err)
 		ctx.JSON(exception.StatusCode, exception.ToResponse())
 		return
@@ -97,8 +97,7 @@ func (ctrl *eventController) UpdateEvent(ctx *gin.Context) {
 		return
 	}
 
-	validate := validator.New()
-	if err := validate.Struct(request); err != nil {
+	if err := ctrl.validator.Struct(request); err != nil {
 		exception := utils.FormatValidationErrors(err)
 		ctx.JSON(exception.StatusCode, exception.ToResponse())
 		return

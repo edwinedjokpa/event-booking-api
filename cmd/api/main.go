@@ -58,7 +58,7 @@ func main() {
 
 	// Initialize Controllers
 	authController := auth.NewAuthController(authService, validator)
-	eventController := event.NewEventController(eventService)
+	eventController := event.NewEventController(eventService, validator)
 
 	// Use gin.New() to build a custom middleware stack
 	router := gin.New()
