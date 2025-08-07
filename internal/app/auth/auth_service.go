@@ -73,7 +73,7 @@ func (svc *authService) Login(request AuthDTO.LoginUserRequest) AuthDTO.LoginRes
 		panic(HTTPException.NewBadRequestException("Invalid credentials", nil))
 	}
 
-	accessExpiresAt := 15 * time.Minute
+	accessExpiresAt := 1 * time.Hour
 	accessClaims := jwt.MapClaims{"userID": user.ID, "email": user.Email}
 	accessToken, err := utils.GenerateToken(accessClaims, accessExpiresAt, svc.jwtSecret)
 	if err != nil {
@@ -83,7 +83,6 @@ func (svc *authService) Login(request AuthDTO.LoginUserRequest) AuthDTO.LoginRes
 	refreshSessionID := utils.GenerateUUID()
 	refreshExpiresAt := 7 * 24 * time.Hour
 	refreshClaims := jwt.MapClaims{"sessionID": refreshSessionID}
-
 	refreshToken, err := utils.GenerateToken(refreshClaims, refreshExpiresAt, svc.jwtSecret)
 	if err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to generate refresh token", nil))

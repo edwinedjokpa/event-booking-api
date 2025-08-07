@@ -61,29 +61,64 @@ func (ctrl *authController) Login(ctx *gin.Context) {
 	}
 
 	tokens := ctrl.service.Login(request)
-	ctx.JSON(http.StatusOK, APIResponse.Success("User login successfully", gin.H{"access_token": tokens.AccessToken, "refresh_token": tokens.RefreshToken}))
+	cookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    tokens.RefreshToken,
+		Path:     "/",
+		Domain:   "",
+		MaxAge:   60 * 60 * 24 * 7,
+		Secure:   false,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	http.SetCookie(ctx.Writer, cookie)
+	ctx.JSON(http.StatusOK, APIResponse.Success("User login successfully", gin.H{"access_token": tokens.AccessToken}))
 }
 
 func (ctrl *authController) Logout(ctx *gin.Context) {
-	refreshToken := ctx.GetHeader("X-Refresh-Token")
-	if refreshToken == "" {
-		exception := HTTPException.NewUnauthorizedException("Refresh token header missing", nil)
-		ctx.JSON(exception.StatusCode, exception.ToResponse())
+	refreshToken, err := ctx.Cookie("refresh_token")
+	if err != nil {
+		ctx.JSON(http.StatusOK, APIResponse.Success("User logged out successfully", nil))
 		return
 	}
 
 	ctrl.service.Logout(refreshToken)
+	cookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/",
+		Domain:   "",
+		MaxAge:   -1,
+		Secure:   false,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	http.SetCookie(ctx.Writer, cookie)
 	ctx.JSON(http.StatusOK, APIResponse.Success("User logged out successfully", nil))
 }
 
 func (ctrl *authController) RefreshToken(ctx *gin.Context) {
-	refreshToken := ctx.GetHeader("X-Refresh-Token")
-	if refreshToken == "" {
-		exception := HTTPException.NewUnauthorizedException("Refresh token header missing", nil)
+	oldRefreshToken, err := ctx.Cookie("refresh_token")
+	if err != nil {
+		exception := HTTPException.NewUnauthorizedException("Refresh token cookie missing", nil)
 		ctx.JSON(exception.StatusCode, exception.ToResponse())
 		return
 	}
 
-	tokens := ctrl.service.RefreshToken(refreshToken)
-	ctx.JSON(http.StatusOK, APIResponse.Success("Tokens refreshed successfully", gin.H{"access_token": tokens.AccessToken, "refresh_token": tokens.RefreshToken}))
+	tokens := ctrl.service.RefreshToken(oldRefreshToken)
+	cookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    tokens.RefreshToken,
+		Path:     "/",
+		Domain:   "",
+		MaxAge:   60 * 60 * 24 * 7,
+		Secure:   false,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	http.SetCookie(ctx.Writer, cookie)
+	ctx.JSON(http.StatusOK, APIResponse.Success("Tokens refreshed successfully", gin.H{"access_token": tokens.AccessToken}))
 }

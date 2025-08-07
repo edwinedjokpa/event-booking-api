@@ -11,18 +11,19 @@ import (
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/db"
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/middleware"
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/redis"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	// Load environment configurations
-	cfg, err := config.LoadConfig()
+	config, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Error loading configuration: %v", err)
 	}
 
 	// Connect Database
-	gormDB, err := db.NewGormDB(cfg.DatabaseURL)
+	gormDB, err := db.NewGormDB(config.DatabaseURL)
 	if err != nil {
 		log.Fatalf("Error connecting to database: %v", err)
 	}
@@ -31,13 +32,16 @@ func main() {
 	db.RunMigrations(gormDB)
 
 	// Initialize Redis
-	redis.InitRedis(cfg.RedisAddr)
+	redis.InitRedis(config.RedisAddr)
 
 	// Use gin.New() to build a custom middleware stack
 	router := gin.New()
 
+	router.SetTrustedProxies(nil)
+
 	// Register global middleware here, before any routes
 	router.Use(gin.Logger())
+	router.Use(cors.Default())
 	router.Use(middleware.RecoveryMiddleware())
 
 	// Initialize Repositories
@@ -45,7 +49,7 @@ func main() {
 	eventRepository := event.NewEventRepository(gormDB)
 
 	// Initialize Services
-	authService := auth.NewAuthService(userRepository, cfg.JWTSecret)
+	authService := auth.NewAuthService(userRepository, config.JWTSecret)
 	eventService := event.NewEventService(eventRepository)
 
 	// Initialize Controllers
@@ -59,7 +63,7 @@ func main() {
 	})
 
 	auth.RegisterRoutes(api, authController)
-	event.RegisterRoutes(api, eventController, []byte(cfg.JWTSecret))
+	event.RegisterRoutes(api, eventController, []byte(config.JWTSecret))
 
 	if err := router.Run(":8000"); err != nil {
 		log.Fatalf("Failed to run server: %v", err)

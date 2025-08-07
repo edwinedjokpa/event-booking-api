@@ -28,23 +28,23 @@ func LoadConfig() (*Config, error) {
 		log.Println("Warning: No .env file found. Using system environment variables.")
 	}
 
-	cfg := &Config{
+	config := &Config{
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		RedisAddr:   os.Getenv("REDIS_URL"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
 	}
 
-	if cfg.DatabaseURL == "" {
+	if config.DatabaseURL == "" {
 		return nil, os.ErrNotExist
 	}
 
-	if cfg.RedisAddr == "" {
+	if config.RedisAddr == "" {
 		return nil, os.ErrNotExist
 	}
 
-	if cfg.JWTSecret == "" {
+	if config.JWTSecret == "" {
 		return nil, os.ErrNotExist
 	}
 
-	return cfg, nil
+	return config, nil
 }
