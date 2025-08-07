@@ -39,13 +39,15 @@ func NewAuthService(repository user.UserRepository, jwtSecret string, sessionSer
 func (svc *authService) Register(request AuthDTO.RegisterUserRequest) {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(request.Email))
 
-	existingUser, err := svc.repository.FindOneByEmail(normalizedEmail)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		panic(err)
+	existingUser, dbErr := svc.repository.FindOneByEmail(normalizedEmail)
+
+	if dbErr != nil && !errors.Is(dbErr, gorm.ErrRecordNotFound) {
+		panic(dbErr)
 	}
 
 	if existingUser != nil {
-		panic(HTTPException.NewConflictException("User with email already exists", existingUser.Email))
+		_, _ = utils.HashPassword("dummy_password_for_security")
+		panic(HTTPException.NewConflictException("User with email already exists", nil))
 	}
 
 	hashedPassword, err := utils.HashPassword(request.Password)
@@ -53,7 +55,7 @@ func (svc *authService) Register(request AuthDTO.RegisterUserRequest) {
 		panic(HTTPException.NewBadRequestException("Failed to hash user password", err.Error()))
 	}
 
-	user := user.User{
+	newUser := user.User{
 		ID:        utils.GenerateUUID(),
 		FirstName: request.FirstName,
 		LastName:  request.LastName,
@@ -61,7 +63,7 @@ func (svc *authService) Register(request AuthDTO.RegisterUserRequest) {
 		Password:  string(hashedPassword),
 	}
 
-	if err := svc.repository.Create(user); err != nil {
+	if err := svc.repository.Create(newUser); err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to create user account", err.Error()))
 	}
 }
@@ -69,21 +71,31 @@ func (svc *authService) Register(request AuthDTO.RegisterUserRequest) {
 func (svc *authService) Login(ctx context.Context, request AuthDTO.LoginUserRequest) AuthDTO.LoginResponse {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(request.Email))
 
-	user, err := svc.repository.FindOneByEmail(normalizedEmail)
-	if err != nil {
+	user, dbErr := svc.repository.FindOneByEmail(normalizedEmail)
+
+	var storedPassword string
+	if dbErr != nil {
+		storedPassword = "dummy_hash_for_security"
+	} else {
+		storedPassword = user.Password
+	}
+
+	isValid := utils.CheckPasswordHash(storedPassword, request.Password)
+
+	isUserNotFound := errors.Is(dbErr, gorm.ErrRecordNotFound)
+	if isUserNotFound || !isValid {
 		panic(HTTPException.NewBadRequestException("Invalid credentials", nil))
 	}
 
-	isValid := utils.CheckPasswordHash(user.Password, request.Password)
-	if !isValid {
-		panic(HTTPException.NewBadRequestException("Invalid credentials", nil))
+	if dbErr != nil {
+		panic(dbErr)
 	}
 
 	accessExpiresAt := 1 * time.Hour
 	accessClaims := jwt.MapClaims{"userID": user.ID, "email": user.Email}
 	accessToken, err := utils.GenerateToken(accessClaims, accessExpiresAt, svc.jwtSecret)
 	if err != nil {
-		panic(HTTPException.NewBadRequestException("Failed to generate access token", nil))
+		panic(HTTPException.NewBadRequestException("Failed to generate access token", err.Error()))
 	}
 
 	refreshSessionID := utils.GenerateUUID()
@@ -91,7 +103,7 @@ func (svc *authService) Login(ctx context.Context, request AuthDTO.LoginUserRequ
 	refreshClaims := jwt.MapClaims{"sessionID": refreshSessionID}
 	refreshToken, err := utils.GenerateToken(refreshClaims, refreshExpiresAt, svc.jwtSecret)
 	if err != nil {
-		panic(HTTPException.NewBadRequestException("Failed to generate refresh token", nil))
+		panic(HTTPException.NewBadRequestException("Failed to generate refresh token", err.Error()))
 	}
 
 	err = svc.sessionService.SetSession(ctx, refreshSessionID, user.ID, user.Email, refreshExpiresAt)
@@ -110,6 +122,9 @@ func (svc *authService) ForgotPassword(request AuthDTO.ForgotPasswordRequest) {
 
 	user, err := svc.repository.FindOneByEmail(normalizedEmail)
 	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			panic(err)
+		}
 		return
 	}
 
@@ -124,29 +139,26 @@ func (svc *authService) ForgotPassword(request AuthDTO.ForgotPasswordRequest) {
 func (svc *authService) ResetPassword(request AuthDTO.ResetPasswordRequest) {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(request.Email))
 
-	user, err := svc.repository.FindOneByEmail(normalizedEmail)
-	if err != nil {
+	user, dbErr := svc.repository.FindOneByEmail(normalizedEmail)
+	otpErr := svc.otpService.ValidateOTP(normalizedEmail, request.OTP)
+
+	isUserNotFound := errors.Is(dbErr, gorm.ErrRecordNotFound)
+	if isUserNotFound || otpErr != nil {
 		panic(HTTPException.NewBadRequestException("Invalid or expired OTP", nil))
 	}
 
-	err = svc.otpService.ValidateOTP(user.Email, request.OTP)
-	if err != nil {
-		panic(HTTPException.NewBadRequestException("Invalid or expired OTP", nil))
+	if dbErr != nil {
+		panic(dbErr)
 	}
 
 	newHashedPassword, err := utils.HashPassword(request.NewPassword)
 	if err != nil {
-		panic(HTTPException.NewBadRequestException("Failed to hash new password", nil))
+		panic(HTTPException.NewBadRequestException("Failed to hash new password", err))
 	}
 
 	err = svc.repository.UpdatePassword(user.ID, newHashedPassword)
 	if err != nil {
-		panic(HTTPException.NewBadRequestException("Failed to update password", err.Error()))
-	}
-
-	err = svc.otpService.DeleteOTPKey(user.Email)
-	if err != nil {
-		return
+		panic(HTTPException.NewBadRequestException("Failed to update password", err))
 	}
 }
 

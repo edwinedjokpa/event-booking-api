@@ -2,16 +2,16 @@ package services
 
 import (
 	"context"
+	"errors"
 	"time"
 
-	"github.com/pquerna/otp/totp"
 	"github.com/redis/go-redis/v9"
+	"github.com/thanhpk/randstr"
 )
 
 type OTPService interface {
 	GenerateAndStoreOTP(email string) (string, error)
 	ValidateOTP(email, otp string) error
-	DeleteOTPKey(email string) error
 }
 
 type otpService struct {
@@ -44,41 +44,27 @@ func (s *otpService) del(key string) error {
 }
 
 func (s *otpService) GenerateAndStoreOTP(email string) (string, error) {
-	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "My App",
-		AccountName: email,
-	})
-
-	if err != nil {
-		return "", err
-	}
+	otp := randstr.String(6, "0123456789")
 
 	otpExpiresAt := 15 * time.Minute
-	if err := s.set("otp_key:"+email, key.Secret(), otpExpiresAt); err != nil {
-		return "", err
-	}
-
-	otp, err := totp.GenerateCode(key.Secret(), time.Now())
-	if err != nil {
+	if err := s.set("otp_code:"+email, otp, otpExpiresAt); err != nil {
 		return "", err
 	}
 
 	return otp, nil
 }
 
-func (s *otpService) ValidateOTP(email, otp string) error {
-	otpKey, err := s.get("otp_key:" + email)
+func (s *otpService) ValidateOTP(email, userOTP string) error {
+	key := "otp_code:" + email
+	storedOTP, err := s.get(key)
 	if err != nil {
 		return err
 	}
 
-	if !totp.Validate(otp, otpKey) {
-		return err
+	if storedOTP != userOTP {
+		return errors.New("invalid OTP")
 	}
 
+	s.del(key)
 	return nil
-}
-
-func (s *otpService) DeleteOTPKey(email string) error {
-	return s.del("otp_key:" + email)
 }

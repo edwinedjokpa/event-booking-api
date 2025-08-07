@@ -110,7 +110,7 @@ func (ctrl *authController) ResetPassword(ctx *gin.Context) {
 	}
 
 	ctrl.service.ResetPassword(request)
-	ctx.JSON(http.StatusOK, APIResponse.Success("Password reset successfully", nil))
+	ctx.JSON(http.StatusOK, APIResponse.Success("Password reset was successful", nil))
 }
 
 func (ctrl *authController) Logout(ctx *gin.Context) {
