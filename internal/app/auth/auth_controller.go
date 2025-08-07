@@ -73,7 +73,7 @@ func (ctrl *authController) Login(ctx *gin.Context) {
 	}
 
 	http.SetCookie(ctx.Writer, cookie)
-	ctx.JSON(http.StatusOK, APIResponse.Success("User login successfully", gin.H{"access_token": tokens.AccessToken}))
+	ctx.JSON(http.StatusOK, APIResponse.Success("User login successfully", gin.H{"token": tokens.AccessToken, "type": "Bearer"}))
 }
 
 func (ctrl *authController) Logout(ctx *gin.Context) {
@@ -100,14 +100,14 @@ func (ctrl *authController) Logout(ctx *gin.Context) {
 }
 
 func (ctrl *authController) RefreshToken(ctx *gin.Context) {
-	oldRefreshToken, err := ctx.Cookie("refresh_token")
+	refreshToken, err := ctx.Cookie("refresh_token")
 	if err != nil {
-		exception := HTTPException.NewUnauthorizedException("Refresh token cookie missing", nil)
+		exception := HTTPException.NewUnauthorizedException("Refresh token is missing", nil)
 		ctx.JSON(exception.StatusCode, exception.ToResponse())
 		return
 	}
 
-	tokens := ctrl.service.RefreshToken(oldRefreshToken)
+	tokens := ctrl.service.RefreshToken(refreshToken)
 	cookie := &http.Cookie{
 		Name:     "refresh_token",
 		Value:    tokens.RefreshToken,
@@ -120,5 +120,5 @@ func (ctrl *authController) RefreshToken(ctx *gin.Context) {
 	}
 
 	http.SetCookie(ctx.Writer, cookie)
-	ctx.JSON(http.StatusOK, APIResponse.Success("Tokens refreshed successfully", gin.H{"access_token": tokens.AccessToken}))
+	ctx.JSON(http.StatusOK, APIResponse.Success("Tokens refreshed successfully", gin.H{"token": tokens.AccessToken}))
 }
