@@ -66,7 +66,7 @@ func (ctrl *authController) Login(ctx *gin.Context) {
 	cookie := &http.Cookie{
 		Name:     "refresh_token",
 		Value:    tokens.RefreshToken,
-		Path:     "/",
+		Path:     "/auth/refresh",
 		Domain:   "",
 		MaxAge:   60 * 60 * 24 * 7,
 		Secure:   false,
@@ -125,7 +125,7 @@ func (ctrl *authController) Logout(ctx *gin.Context) {
 	cookie := &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
-		Path:     "/",
+		Path:     "/auth/refresh",
 		Domain:   "",
 		MaxAge:   -1,
 		Secure:   false,
@@ -149,7 +149,7 @@ func (ctrl *authController) RefreshToken(ctx *gin.Context) {
 	cookie := &http.Cookie{
 		Name:     "refresh_token",
 		Value:    tokens.RefreshToken,
-		Path:     "/",
+		Path:     "/auth/refresh",
 		Domain:   "",
 		MaxAge:   60 * 60 * 24 * 7,
 		Secure:   false,
