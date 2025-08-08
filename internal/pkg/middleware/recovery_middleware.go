@@ -4,7 +4,8 @@ import (
 	"log"
 	"net/http"
 
-	HttpException "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/httpexception"
+	HTTPException "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/httpexception"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -14,12 +15,12 @@ func RecoveryMiddleware() gin.HandlerFunc {
 			if r := recover(); r != nil {
 				log.Printf("Panic recovered: %v", r)
 
-				if httpErr, ok := r.(*HttpException.ApiException); ok {
+				if httpErr, ok := r.(*HTTPException.HTTPException); ok {
 					ctx.JSON(httpErr.StatusCode, httpErr.ToResponse())
 					return
 				}
 
-				exception := HttpException.NewInternalServerException(nil)
+				exception := HTTPException.NewInternalServerException(nil)
 				ctx.JSON(http.StatusInternalServerError, exception.ToResponse())
 			}
 		}()

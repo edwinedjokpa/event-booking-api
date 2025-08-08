@@ -1,10 +1,11 @@
-package utils
+package util
 
 import (
 	"fmt"
 	"strings"
 
-	HttpException "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/httpexception"
+	HTTPException "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/httpexception"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -14,7 +15,7 @@ func GenerateUUID() string {
 	return uuid.New().String()
 }
 
-func FormatValidationErrors(err error) *HttpException.ApiException {
+func FormatValidationErrors(err error) *HTTPException.HTTPException {
 	if validationErrors, ok := err.(validator.ValidationErrors); ok {
 		var errorMessages []string
 
@@ -22,10 +23,10 @@ func FormatValidationErrors(err error) *HttpException.ApiException {
 			errorMessages = append(errorMessages, fmt.Sprintf("Field '%s' failed validation: %s", fieldErr.Field(), fieldErr.Tag()))
 		}
 
-		return HttpException.NewBadRequestException("Validation failed", strings.Join(errorMessages, ", "))
+		return HTTPException.NewBadRequestException("Validation failed", strings.Join(errorMessages, ", "))
 	}
 
-	return HttpException.NewInternalServerException(err)
+	return HTTPException.NewInternalServerException(err)
 }
 
 func HashPassword(password string) (string, error) {

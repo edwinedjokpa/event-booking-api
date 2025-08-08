@@ -9,9 +9,11 @@ import (
 
 	AuthDTO "github.com/edwinedjokpa/event-booking-api/internal/app/auth/dto"
 	"github.com/edwinedjokpa/event-booking-api/internal/app/user"
-	"github.com/edwinedjokpa/event-booking-api/internal/pkg/services"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/service/otp"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/service/session"
 	HTTPException "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/httpexception"
-	"github.com/edwinedjokpa/event-booking-api/internal/pkg/utils"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/util"
+
 	"github.com/golang-jwt/jwt/v4"
 	"gorm.io/gorm"
 )
@@ -28,11 +30,11 @@ type AuthService interface {
 type authService struct {
 	repository     user.UserRepository
 	jwtSecret      string
-	sessionService *services.SessionService
-	otpService     services.OTPService
+	sessionService *session.SessionService
+	otpService     otp.OTPService
 }
 
-func NewAuthService(repository user.UserRepository, jwtSecret string, sessionService *services.SessionService, otpService services.OTPService) AuthService {
+func NewAuthService(repository user.UserRepository, jwtSecret string, sessionService *session.SessionService, otpService otp.OTPService) AuthService {
 	return &authService{repository, jwtSecret, sessionService, otpService}
 }
 
@@ -46,17 +48,17 @@ func (svc *authService) Register(request AuthDTO.RegisterUserRequest) {
 	}
 
 	if existingUser != nil {
-		_, _ = utils.HashPassword("dummy_password_for_security")
+		_, _ = util.HashPassword("dummy_password_for_security")
 		panic(HTTPException.NewConflictException("User with email already exists", nil))
 	}
 
-	hashedPassword, err := utils.HashPassword(request.Password)
+	hashedPassword, err := util.HashPassword(request.Password)
 	if err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to hash user password", err.Error()))
 	}
 
 	newUser := user.User{
-		ID:        utils.GenerateUUID(),
+		ID:        util.GenerateUUID(),
 		FirstName: request.FirstName,
 		LastName:  request.LastName,
 		Email:     normalizedEmail,
@@ -80,7 +82,7 @@ func (svc *authService) Login(ctx context.Context, request AuthDTO.LoginUserRequ
 		storedPassword = user.Password
 	}
 
-	isValid := utils.CheckPasswordHash(storedPassword, request.Password)
+	isValid := util.CheckPasswordHash(storedPassword, request.Password)
 
 	isUserNotFound := errors.Is(dbErr, gorm.ErrRecordNotFound)
 	if isUserNotFound || !isValid {
@@ -93,15 +95,15 @@ func (svc *authService) Login(ctx context.Context, request AuthDTO.LoginUserRequ
 
 	accessExpiresAt := 1 * time.Hour
 	accessClaims := jwt.MapClaims{"userID": user.ID, "email": user.Email}
-	accessToken, err := utils.GenerateToken(accessClaims, accessExpiresAt, svc.jwtSecret)
+	accessToken, err := util.GenerateToken(accessClaims, accessExpiresAt, svc.jwtSecret)
 	if err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to generate access token", err.Error()))
 	}
 
-	refreshSessionID := utils.GenerateUUID()
+	refreshSessionID := util.GenerateUUID()
 	refreshExpiresAt := 7 * 24 * time.Hour
 	refreshClaims := jwt.MapClaims{"sessionID": refreshSessionID}
-	refreshToken, err := utils.GenerateToken(refreshClaims, refreshExpiresAt, svc.jwtSecret)
+	refreshToken, err := util.GenerateToken(refreshClaims, refreshExpiresAt, svc.jwtSecret)
 	if err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to generate refresh token", err.Error()))
 	}
@@ -151,7 +153,7 @@ func (svc *authService) ResetPassword(request AuthDTO.ResetPasswordRequest) {
 		panic(dbErr)
 	}
 
-	newHashedPassword, err := utils.HashPassword(request.NewPassword)
+	newHashedPassword, err := util.HashPassword(request.NewPassword)
 	if err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to hash new password", err))
 	}
@@ -163,7 +165,7 @@ func (svc *authService) ResetPassword(request AuthDTO.ResetPasswordRequest) {
 }
 
 func (svc *authService) Logout(ctx context.Context, refreshToken string) {
-	_, claims, err := utils.ValidateToken(refreshToken, []byte(svc.jwtSecret))
+	_, claims, err := util.ValidateToken(refreshToken, []byte(svc.jwtSecret))
 	if err != nil {
 		panic(HTTPException.NewUnauthorizedException("Invalid refresh token", nil))
 	}
@@ -180,7 +182,7 @@ func (svc *authService) Logout(ctx context.Context, refreshToken string) {
 }
 
 func (svc *authService) RefreshToken(ctx context.Context, tokenString string) AuthDTO.LoginResponse {
-	_, claims, err := utils.ValidateToken(tokenString, []byte(svc.jwtSecret))
+	_, claims, err := util.ValidateToken(tokenString, []byte(svc.jwtSecret))
 	if err != nil {
 		panic(HTTPException.NewUnauthorizedException("Invalid refresh token", nil))
 	}
@@ -204,7 +206,7 @@ func (svc *authService) RefreshToken(ctx context.Context, tokenString string) Au
 		panic(HTTPException.NewBadRequestException("failed to delete sessionI D", nil))
 	}
 
-	newSessionID := utils.GenerateUUID()
+	newSessionID := util.GenerateUUID()
 	refreshExpiresAt := 7 * 24 * time.Hour
 
 	if err := svc.sessionService.SetSession(ctx, newSessionID, sessionData.UserID, sessionData.Email, refreshExpiresAt); err != nil {
@@ -213,13 +215,13 @@ func (svc *authService) RefreshToken(ctx context.Context, tokenString string) Au
 
 	accessExpiresAt := 1 * time.Hour
 	accessClaims := jwt.MapClaims{"userID": sessionData.UserID, "email": sessionData.Email}
-	newAccessToken, err := utils.GenerateToken(accessClaims, accessExpiresAt, svc.jwtSecret)
+	newAccessToken, err := util.GenerateToken(accessClaims, accessExpiresAt, svc.jwtSecret)
 	if err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to generate new access token", nil))
 	}
 
 	refreshClaims := jwt.MapClaims{"sessionID": newSessionID}
-	newRefreshToken, err := utils.GenerateToken(refreshClaims, refreshExpiresAt, svc.jwtSecret)
+	newRefreshToken, err := util.GenerateToken(refreshClaims, refreshExpiresAt, svc.jwtSecret)
 	if err != nil {
 		panic(HTTPException.NewBadRequestException("Failed to generate new refresh token", nil))
 	}

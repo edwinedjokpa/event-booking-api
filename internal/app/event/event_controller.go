@@ -6,7 +6,7 @@ import (
 	EventDTO "github.com/edwinedjokpa/event-booking-api/internal/app/event/dto"
 	APIResponse "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/apiresponse"
 	HTTPException "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/httpexception"
-	"github.com/edwinedjokpa/event-booking-api/internal/pkg/utils"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -52,7 +52,7 @@ func (ctrl *eventController) CreateEvent(ctx *gin.Context) {
 	}
 
 	if err := ctrl.validator.Struct(request); err != nil {
-		exception := utils.FormatValidationErrors(err)
+		exception := util.FormatValidationErrors(err)
 		ctx.JSON(exception.StatusCode, exception.ToResponse())
 		return
 	}
@@ -98,7 +98,7 @@ func (ctrl *eventController) UpdateEvent(ctx *gin.Context) {
 	}
 
 	if err := ctrl.validator.Struct(request); err != nil {
-		exception := utils.FormatValidationErrors(err)
+		exception := util.FormatValidationErrors(err)
 		ctx.JSON(exception.StatusCode, exception.ToResponse())
 		return
 	}

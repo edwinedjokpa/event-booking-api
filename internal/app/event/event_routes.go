@@ -2,6 +2,7 @@ package event
 
 import (
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/middleware"
+
 	"github.com/gin-gonic/gin"
 )
 

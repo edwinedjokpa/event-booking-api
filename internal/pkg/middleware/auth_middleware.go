@@ -4,7 +4,8 @@ import (
 	"strings"
 
 	HTTPException "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/httpexception"
-	"github.com/edwinedjokpa/event-booking-api/internal/pkg/utils"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/util"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -30,7 +31,7 @@ func AuthMiddleware(jwtKey []byte) gin.HandlerFunc {
 
 		tokenString := parts[1]
 
-		token, claims, err := utils.ValidateToken(tokenString, jwtKey)
+		token, claims, err := util.ValidateToken(tokenString, jwtKey)
 		if err != nil || token == nil || !token.Valid {
 			ctx.AbortWithStatusJSON(
 				HTTPException.NewUnauthorizedException("Invalid token", nil).StatusCode,

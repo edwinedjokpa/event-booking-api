@@ -7,7 +7,8 @@ import (
 
 	EventDTO "github.com/edwinedjokpa/event-booking-api/internal/app/event/dto"
 	HTTPException "github.com/edwinedjokpa/event-booking-api/internal/pkg/shared/httpexception"
-	"github.com/edwinedjokpa/event-booking-api/internal/pkg/utils"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/util"
+
 	"gorm.io/gorm"
 )
 
@@ -29,7 +30,7 @@ func NewEventService(repository EventRepository) EventService {
 
 func (svc *eventService) CreateEvent(userID string, request EventDTO.CreateEventRequest) {
 	event := Event{
-		ID:          utils.GenerateUUID(),
+		ID:          util.GenerateUUID(),
 		Name:        request.Name,
 		Description: request.Description,
 		Location:    request.Location,

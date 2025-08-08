@@ -1,8 +1,7 @@
-package services
+package otp
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -62,9 +61,12 @@ func (s *otpService) ValidateOTP(email, userOTP string) error {
 	}
 
 	if storedOTP != userOTP {
-		return errors.New("invalid OTP")
+		return err
 	}
 
-	s.del(key)
+	if err := s.del(key); err != nil {
+		return err
+	}
+
 	return nil
 }

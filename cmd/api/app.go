@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/edwinedjokpa/event-booking-api/internal/app/auth"
@@ -10,8 +11,10 @@ import (
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/db"
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/middleware"
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/redis"
-	"github.com/edwinedjokpa/event-booking-api/internal/pkg/services"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/service/otp"
+	"github.com/edwinedjokpa/event-booking-api/internal/pkg/service/session"
 	"github.com/edwinedjokpa/event-booking-api/internal/pkg/validator"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -37,10 +40,10 @@ func SetupApp(config *config.Config) (*gin.Engine, error) {
 	}
 
 	// Initialize the Session Service
-	sessionService := services.NewSessionService(redisClient)
+	sessionService := session.NewSessionService(redisClient)
 
 	// Initialize the Otp Service
-	otpService := services.NewOTPService(redisClient)
+	otpService := otp.NewOTPService(redisClient)
 
 	// Initialize Repositories
 	userRepository := user.NewUserRepository(gormDB)
@@ -56,7 +59,10 @@ func SetupApp(config *config.Config) (*gin.Engine, error) {
 
 	// Create a new Gin router with custom middleware stack.
 	router := gin.New()
-	router.SetTrustedProxies(nil)
+
+	if err := router.SetTrustedProxies(nil); err != nil {
+		log.Fatalf("failed to set trusted proxies: %v", err)
+	}
 
 	// Register global middleware
 	router.Use(gin.Logger())
