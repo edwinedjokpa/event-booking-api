@@ -93,7 +93,7 @@ func (ctrl *authController) ForgotPassword(ctx *gin.Context) {
 	}
 
 	ctrl.service.ForgotPassword(request)
-	ctx.JSON(http.StatusOK, APIResponse.Success("If an account with that email exists, a password reset OTP has been sent.", nil))
+	ctx.JSON(http.StatusOK, APIResponse.Success("If an account with this email exists, a password reset OTP has been sent.", nil))
 }
 
 func (ctrl *authController) ResetPassword(ctx *gin.Context) {
@@ -112,29 +112,6 @@ func (ctrl *authController) ResetPassword(ctx *gin.Context) {
 
 	ctrl.service.ResetPassword(request)
 	ctx.JSON(http.StatusOK, APIResponse.Success("Password reset was successful", nil))
-}
-
-func (ctrl *authController) Logout(ctx *gin.Context) {
-	refreshToken, err := ctx.Cookie("refresh_token")
-	if err != nil {
-		ctx.JSON(http.StatusOK, APIResponse.Success("User logged out successfully", nil))
-		return
-	}
-
-	ctrl.service.Logout(ctx, refreshToken)
-	cookie := &http.Cookie{
-		Name:     "refresh_token",
-		Value:    "",
-		Path:     "/auth/refresh",
-		Domain:   "",
-		MaxAge:   -1,
-		Secure:   false,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	}
-
-	http.SetCookie(ctx.Writer, cookie)
-	ctx.JSON(http.StatusOK, APIResponse.Success("User logged out successfully", nil))
 }
 
 func (ctrl *authController) RefreshToken(ctx *gin.Context) {
@@ -159,4 +136,27 @@ func (ctrl *authController) RefreshToken(ctx *gin.Context) {
 
 	http.SetCookie(ctx.Writer, cookie)
 	ctx.JSON(http.StatusOK, APIResponse.Success("Tokens refreshed successfully", gin.H{"token": tokens.AccessToken}))
+}
+
+func (ctrl *authController) Logout(ctx *gin.Context) {
+	refreshToken, err := ctx.Cookie("refresh_token")
+	if err != nil {
+		ctx.JSON(http.StatusOK, APIResponse.Success("User logged out successfully", nil))
+		return
+	}
+
+	ctrl.service.Logout(ctx, refreshToken)
+	cookie := &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Path:     "/auth/refresh",
+		Domain:   "",
+		MaxAge:   -1,
+		Secure:   false,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+
+	http.SetCookie(ctx.Writer, cookie)
+	ctx.JSON(http.StatusOK, APIResponse.Success("User logged out successfully", nil))
 }

@@ -48,7 +48,6 @@ func (svc *authService) Register(request AuthDTO.RegisterUserRequest) {
 	}
 
 	if existingUser != nil {
-		_, _ = util.HashPassword("dummy_password_for_security")
 		panic(HTTPException.NewConflictException("User with email already exists", nil))
 	}
 
@@ -83,8 +82,8 @@ func (svc *authService) Login(ctx context.Context, request AuthDTO.LoginUserRequ
 	}
 
 	isValid := util.CheckPasswordHash(storedPassword, request.Password)
-
 	isUserNotFound := errors.Is(dbErr, gorm.ErrRecordNotFound)
+
 	if isUserNotFound || !isValid {
 		panic(HTTPException.NewBadRequestException("Invalid credentials", nil))
 	}
@@ -93,7 +92,7 @@ func (svc *authService) Login(ctx context.Context, request AuthDTO.LoginUserRequ
 		panic(dbErr)
 	}
 
-	accessExpiresAt := 1 * time.Hour
+	accessExpiresAt := 15 * time.Minute
 	accessClaims := jwt.MapClaims{"userID": user.ID, "email": user.Email}
 	accessToken, err := util.GenerateToken(accessClaims, accessExpiresAt, svc.jwtSecret)
 	if err != nil {
@@ -164,23 +163,6 @@ func (svc *authService) ResetPassword(request AuthDTO.ResetPasswordRequest) {
 	}
 }
 
-func (svc *authService) Logout(ctx context.Context, refreshToken string) {
-	_, claims, err := util.ValidateToken(refreshToken, []byte(svc.jwtSecret))
-	if err != nil {
-		panic(HTTPException.NewUnauthorizedException("Invalid refresh token", nil))
-	}
-
-	sessionID, ok := claims["sessionID"].(string)
-	if !ok {
-		panic(HTTPException.NewUnauthorizedException("invalid session ID in refresh token claims", nil))
-	}
-
-	err = svc.sessionService.DeleteSession(ctx, sessionID)
-	if err != nil {
-		panic(HTTPException.NewBadRequestException("Failed to delete session", err.Error()))
-	}
-}
-
 func (svc *authService) RefreshToken(ctx context.Context, tokenString string) AuthDTO.LoginResponse {
 	_, claims, err := util.ValidateToken(tokenString, []byte(svc.jwtSecret))
 	if err != nil {
@@ -229,5 +211,22 @@ func (svc *authService) RefreshToken(ctx context.Context, tokenString string) Au
 	return AuthDTO.LoginResponse{
 		AccessToken:  newAccessToken,
 		RefreshToken: newRefreshToken,
+	}
+}
+
+func (svc *authService) Logout(ctx context.Context, refreshToken string) {
+	_, claims, err := util.ValidateToken(refreshToken, []byte(svc.jwtSecret))
+	if err != nil {
+		panic(HTTPException.NewUnauthorizedException("Invalid refresh token", nil))
+	}
+
+	sessionID, ok := claims["sessionID"].(string)
+	if !ok {
+		panic(HTTPException.NewUnauthorizedException("invalid session ID in refresh token claims", nil))
+	}
+
+	err = svc.sessionService.DeleteSession(ctx, sessionID)
+	if err != nil {
+		panic(HTTPException.NewBadRequestException("Failed to delete session", err.Error()))
 	}
 }
