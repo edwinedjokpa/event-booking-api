@@ -7,7 +7,7 @@ import (
 type HTTPException struct {
 	StatusCode int
 	Message    string
-	Details    interface{}
+	Errors     interface{}
 }
 
 func (e *HTTPException) Error() string {
@@ -15,18 +15,24 @@ func (e *HTTPException) Error() string {
 }
 
 func (e *HTTPException) ToResponse() map[string]interface{} {
-	return map[string]interface{}{
-		"success": false,
-		"message": e.Message,
-		"details": e.Details,
+	response := map[string]interface{}{
+		"success":    false,
+		"statusCode": e.StatusCode,
+		"message":    e.Message,
 	}
+
+	if e.Errors != nil {
+		response["errors"] = e.Errors
+	}
+
+	return response
 }
 
 func NewBadRequestException(message string, err interface{}) *HTTPException {
 	return &HTTPException{
 		StatusCode: http.StatusBadRequest,
 		Message:    message,
-		Details:    err,
+		Errors:     err,
 	}
 }
 
@@ -34,7 +40,7 @@ func NewConflictException(message string, err interface{}) *HTTPException {
 	return &HTTPException{
 		StatusCode: http.StatusConflict,
 		Message:    message,
-		Details:    err,
+		Errors:     err,
 	}
 }
 
@@ -42,7 +48,7 @@ func NewNotFoundException(message string, err interface{}) *HTTPException {
 	return &HTTPException{
 		StatusCode: http.StatusNotFound,
 		Message:    message,
-		Details:    err,
+		Errors:     err,
 	}
 }
 
@@ -50,15 +56,14 @@ func NewUnauthorizedException(message string, err interface{}) *HTTPException {
 	return &HTTPException{
 		StatusCode: http.StatusUnauthorized,
 		Message:    message,
-		Details:    err,
+		Errors:     err,
 	}
 }
 
 func NewInternalServerException(err interface{}) *HTTPException {
 	return &HTTPException{
 		StatusCode: http.StatusInternalServerError,
-		// Message:    "Internal Server Error",
-		Message: "An unexpected error occurred...",
-		Details: err,
+		Message:    "An unexpected error occurred...",
+		Errors:     err,
 	}
 }

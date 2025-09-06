@@ -42,7 +42,6 @@ func (svc *authService) Register(request AuthDTO.RegisterUserRequest) {
 	normalizedEmail := strings.ToLower(strings.TrimSpace(request.Email))
 
 	existingUser, dbErr := svc.repository.FindOneByEmail(normalizedEmail)
-
 	if dbErr != nil && !errors.Is(dbErr, gorm.ErrRecordNotFound) {
 		panic(dbErr)
 	}
@@ -74,22 +73,19 @@ func (svc *authService) Login(ctx context.Context, request AuthDTO.LoginUserRequ
 
 	user, dbErr := svc.repository.FindOneByEmail(normalizedEmail)
 
-	var storedPassword string
 	if dbErr != nil {
-		storedPassword = "dummy_hash_for_security"
-	} else {
-		storedPassword = user.Password
+		if errors.Is(dbErr, gorm.ErrRecordNotFound) {
+			util.CheckPasswordHash("dummy_hash_for_security", request.Password)
+			panic(HTTPException.NewBadRequestException("Invalid credentials", nil))
+		}
+		panic(dbErr)
 	}
 
-	isValid := util.CheckPasswordHash(storedPassword, request.Password)
+	isValid := util.CheckPasswordHash(user.Password, request.Password)
 	isUserNotFound := errors.Is(dbErr, gorm.ErrRecordNotFound)
 
 	if isUserNotFound || !isValid {
 		panic(HTTPException.NewBadRequestException("Invalid credentials", nil))
-	}
-
-	if dbErr != nil {
-		panic(dbErr)
 	}
 
 	accessExpiresAt := 15 * time.Minute
