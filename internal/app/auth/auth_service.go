@@ -73,18 +73,19 @@ func (svc *authService) Login(ctx context.Context, request AuthDTO.LoginUserRequ
 
 	user, dbErr := svc.repository.FindOneByEmail(normalizedEmail)
 
-	if dbErr != nil {
-		if errors.Is(dbErr, gorm.ErrRecordNotFound) {
-			util.CheckPasswordHash("dummy_hash_for_security", request.Password)
-			panic(HTTPException.NewBadRequestException("Invalid credentials", nil))
-		}
+	var storedPassword string
+	if user != nil {
+		storedPassword = user.Password
+	} else {
+		storedPassword = "dummy_hash_for_security"
+	}
+
+	if dbErr != nil && !errors.Is(dbErr, gorm.ErrRecordNotFound) {
 		panic(dbErr)
 	}
 
-	isValid := util.CheckPasswordHash(user.Password, request.Password)
-	isUserNotFound := errors.Is(dbErr, gorm.ErrRecordNotFound)
-
-	if isUserNotFound || !isValid {
+	isValid := util.CheckPasswordHash(storedPassword, request.Password)
+	if user == nil || !isValid {
 		panic(HTTPException.NewBadRequestException("Invalid credentials", nil))
 	}
 
